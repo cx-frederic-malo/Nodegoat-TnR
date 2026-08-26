@@ -44,6 +44,7 @@ jobs:
         id: test-suite
         run: |
           NODE_ENV=test npm start -- --silent &
+          timeout 30s bash -c 'until nc -z localhost 4000; do sleep 1; done'
           npm run test:ci -- --config video=true
 
       - name: Prepare cypress artifacts
