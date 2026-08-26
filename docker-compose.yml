@@ -1,17 +1,48 @@
-version: "3.7"
-
 services:
-  web:
-    build: .
-    environment:
-      NODE_ENV:
-      MONGODB_URI: mongodb://mongo:27017/nodegoat
-    command: sh -c "until nc -z -w 2 mongo 27017 && echo 'mongo is ready for connections' && node artifacts/db-reset.js && npm start; do sleep 2; done"
-    ports:
-      - "4000:4000"
-
-  mongo:
+  mongodb:
     image: mongo:4.4
-    user: mongodb
-    expose:
-      - 27017
+    container_name: nodegoat-db
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - nodegoat-network
+    healthcheck:
+      test: echo 'db.stats().ok' | mongo localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  nodegoat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nodegoat-app
+    restart: always
+    environment:
+      NODE_ENV: development
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/${MONGO_DATABASE}?authSource=admin
+      PORT: ${APP_PORT}
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - nodegoat-network
+    command: >
+      sh -c "npm run db:seed && npm start"
+
+volumes:
+  mongo-data:
+
+networks:
+  nodegoat-network:
+    driver: bridge
